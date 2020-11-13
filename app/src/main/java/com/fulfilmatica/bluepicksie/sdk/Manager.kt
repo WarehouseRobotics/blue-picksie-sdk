@@ -44,10 +44,11 @@ class Manager() {
         initialized = false
 
         if (socket != null && socket!!.isConnected)
-            socket!!.close()
+            socket?.close()
     }
 
     fun isConnected(): Boolean {
+        if (socket == null) return false
         return socket!!.isConnected
     }
 
