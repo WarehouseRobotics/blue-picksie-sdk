@@ -7,19 +7,37 @@ import android.bluetooth.BluetoothSocket
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.delay
+import java.io.IOException
+import java.lang.Exception
 import java.util.*
 import kotlin.concurrent.thread
+
+interface CartButtonClickDelegate {
+    fun onCartButtonDown(channel: Int) {
+
+    }
+
+    fun onCartButtonUp(channel: Int) {
+
+    }
+}
 
 class Manager() {
     val TAG = "BLUEPICKSIE"
     var socket: BluetoothSocket? = null
     var device: BluetoothDevice? = null
     var cmdQueue: Queue<String> = LinkedList<String>()
+    var isConnecting: Boolean = false
 
     var initialized: Boolean = false
 
+    lateinit var delegate: CartButtonClickDelegate
+
     fun connect(): Boolean {
-        if (!initialized) initialize()
+        if (isConnecting)
+            throw Exception("Connection already in progress")
+
+        isConnecting = true;
 
         finddevice@ for (d in BluetoothAdapter.getDefaultAdapter().bondedDevices) {
             if ((d.name.indexOf("picksie") > -1 || d.name.indexOf("rpidenis") > -1)) {
@@ -28,13 +46,24 @@ class Manager() {
             }
         }
 
-        if (device == null) return false
+        if (device == null) {
+            isConnecting = false
+            return false
+        }
 
-        Log.d(TAG, String.format("Connected to device %s", device!!.name))
-        socket = device!!.createRfcommSocketToServiceRecord(UUID.fromString("94f39d29-7d6d-437d-973b-fba39e49d4ee"))
-        socket!!.connect()
+        try {
+            Log.d(TAG, String.format("Connected to device %s", device!!.name))
+            socket = device?.createRfcommSocketToServiceRecord(UUID.fromString("94f39d29-7d6d-437d-973b-fba39e49d4ee"))
+            socket?.connect()
 
-        return socket!!.isConnected
+            if (!initialized) initialize()
+        } catch(e: Exception) {
+            Log.d(TAG, e.toString() + "\n" + e.stackTrace.toString())
+        } finally {
+            isConnecting = false
+        }
+
+        return socket?.isConnected == true
     }
 
     /**
@@ -48,8 +77,9 @@ class Manager() {
     }
 
     fun isConnected(): Boolean {
+        if (isConnecting) return false
         if (socket == null) return false
-        return socket!!.isConnected
+        return socket?.isConnected == true
     }
 
     fun setScreen(channel: Int, data: String) {
@@ -58,6 +88,10 @@ class Manager() {
 
     fun clearScreen(channel: Int) {
         cmdQueue.add(String.format("=%d$$$$\n", channel))
+    }
+
+    fun setButtonDelegate(delegate: CartButtonClickDelegate) {
+        this.delegate = delegate
     }
 
     private fun initialize() {
@@ -69,8 +103,33 @@ class Manager() {
     private fun readButtons() {
         thread(start = true) {
             while (initialized) {
-                // TODO
-                Thread.sleep(100)
+                var stream = socket!!.inputStream
+
+                try {
+                    if (stream.available() > 0) {
+                        var firstByte = stream.read()
+                        var secondByte: Int
+
+                        Log.d(TAG, String.format("Got byte: %d", firstByte))
+
+                        if (firstByte.toChar().equals('C')) {
+                            secondByte = stream.read()
+                            Log.d(TAG, String.format("Got C byte for ch: %d", secondByte))
+                            if (this::delegate.isInitialized) {
+                                delegate.onCartButtonDown(secondByte.toChar().toString().toInt())
+                            }
+                        } else if (firstByte.toChar().equals('O')) {
+                            secondByte = stream.read()
+                            Log.d(TAG, String.format("Got O byte for ch: %d", secondByte))
+                            if (this::delegate.isInitialized) {
+                                delegate.onCartButtonUp(secondByte.toChar().toString().toInt())
+                            }
+                        }
+                    }
+                } catch(e: IOException) {
+                    Log.d(TAG, e.toString() + "\n" + e.stackTrace.toString())
+                }
+                Thread.sleep(10)
             }
         }
     }

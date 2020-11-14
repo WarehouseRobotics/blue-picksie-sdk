@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.Toast
 import androidx.navigation.fragment.findNavController
+import com.fulfilmatica.bluepicksie.sdk.CartButtonClickDelegate
 import com.fulfilmatica.bluepicksie.sdk.Manager
 import java.time.Duration
 import kotlin.time.DurationUnit
@@ -18,7 +19,7 @@ import kotlin.time.toDuration
 /**
  * A simple [Fragment] subclass as the default destination in the navigation.
  */
-class FirstFragment : Fragment() {
+class FirstFragment : Fragment(), CartButtonClickDelegate {
     lateinit var cartManager: Manager
 
     override fun onCreateView(
@@ -52,18 +53,32 @@ class FirstFragment : Fragment() {
     fun onConnectClick(view: View) {
         cartManager = Manager()
 
+        if (cartManager.isConnected()) {
+            Toast.makeText(context, "Already connected", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (cartManager.isConnecting) {
+            Toast.makeText(context, "Connection in progress", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         // Post some test messages on timeout
         Handler(Looper.getMainLooper()).postDelayed({
             var connected = cartManager.connect()
             if (!connected) {
                 System.out.println("[BLUEPICKSIE] Could not connect to the cart")
+                Toast.makeText(context, "Could not connect", Toast.LENGTH_LONG).show()
+            } else {
+                cartManager.setButtonDelegate(this)
+                Toast.makeText(context, String.format("Connected to %s", cartManager.device?.name), Toast.LENGTH_LONG).show()
             }
         }, 1)
     }
 
     fun onTest1Click(view: View) {
         if (!this::cartManager.isInitialized || !cartManager.isConnected()) {
-            Toast.makeText(view.context, "Not connected", 3)
+            Toast.makeText(context, "Not connected", Toast.LENGTH_LONG).show()
             return
         }
 
@@ -95,27 +110,53 @@ class FirstFragment : Fragment() {
 
     fun onTest2Click(view: View) {
         if (!this::cartManager.isInitialized || !cartManager.isConnected()) {
-            Toast.makeText(view.context, "Not connected", 3)
+            Toast.makeText(context, "Not connected", Toast.LENGTH_LONG).show()
             return
         }
 
         Handler(Looper.getMainLooper()).postDelayed({
-            System.out.println("[BLUEPICKSIE] Starting test2")
-            cartManager.setScreen(1, "0001")
-            cartManager.setScreen(2, "0002")
-            cartManager.setScreen(3, "0003")
-            cartManager.setScreen(4, "0004")
-            cartManager.setScreen(5, "0005")
-            cartManager.setScreen(6, "0006")
-            cartManager.setScreen(7, "0007")
-            cartManager.setScreen(8, "0008")
+            System.out.println("[BLUEPICKSIE] Starting test2 (set all screens to index)")
+            cartManager.setScreen(0, "0001")
+            cartManager.setScreen(1, "0002")
+            cartManager.setScreen(2, "0003")
+            cartManager.setScreen(3, "0004")
+            cartManager.setScreen(4, "0005")
+            cartManager.setScreen(5, "0006")
+            cartManager.setScreen(6, "0007")
+            cartManager.setScreen(7, "0008")
         }, 1)
     }
 
     fun onTest3Click(view: View) {
         if (!this::cartManager.isInitialized || !cartManager.isConnected()) {
-            Toast.makeText(view.context, "Not connected", 3)
+            Toast.makeText(context, "Not connected", Toast.LENGTH_LONG).show()
             return
+        }
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            System.out.println("[BLUEPICKSIE] Starting test3 (clear all screens)")
+            cartManager.clearScreen(0)
+            cartManager.clearScreen(1)
+            cartManager.clearScreen(2)
+            cartManager.clearScreen(3)
+            cartManager.clearScreen(4)
+            cartManager.clearScreen(5)
+            cartManager.clearScreen(6)
+            cartManager.clearScreen(7)
+        }, 1)
+    }
+
+    override fun onCartButtonDown(channel: Int) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, String.format("Button %d DOWN", channel), Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+
+    override fun onCartButtonUp(channel: Int) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, String.format("Button %d UP", channel), Toast.LENGTH_SHORT)
+                .show()
         }
     }
 }
